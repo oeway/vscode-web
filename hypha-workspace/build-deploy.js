@@ -116,7 +116,7 @@ const vscodeWebDir = path.join(deployDir, 'vscode-web');
 fs.mkdirSync(vscodeWebDir, { recursive: true });
 
 copyIfExists(path.join(vscodeWebDist, 'favicon.ico'), path.join(vscodeWebDir, 'favicon.ico'));
-copyIfExists(path.join(vscodeWebDist, 'manifest.json'), path.join(vscodeWebDir, 'manifest.json'));
+copyIfExists('./manifest.json', path.join(vscodeWebDir, 'manifest.json'));
 copyIfExists(path.join(vscodeWebDist, 'code-192.png'), path.join(vscodeWebDir, 'code-192.png'));
 copyIfExists(path.join(vscodeWebDist, 'code-512.png'), path.join(vscodeWebDir, 'code-512.png'));
 
