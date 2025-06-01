@@ -10,6 +10,13 @@ export declare class HyphaAuthProvider {
     private client;
     private server;
     private readonly serverUrl;
+    private isConnecting;
+    private connectionPromise;
+    private _onAuthStateChanged;
+    readonly onAuthStateChanged: vscode.Event<{
+        isAuthenticated: boolean;
+        user: HyphaUser | null;
+    }>;
     constructor(context: vscode.ExtensionContext);
     private loadSavedAuth;
     private isTokenValid;
@@ -22,8 +29,12 @@ export declare class HyphaAuthProvider {
     isAuthenticated(): boolean;
     getUser(): HyphaUser | null;
     getToken(): string | null;
-    getServer(): any;
+    getServer(): Promise<any>;
+    private connectWithExistingToken;
+    ensureConnection(): Promise<any>;
     getArtifactManager(): Promise<any>;
+    private fireAuthStateChanged;
+    dispose(): void;
 }
 export {};
 //# sourceMappingURL=HyphaAuthProvider.d.ts.map
