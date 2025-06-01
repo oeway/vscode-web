@@ -22,6 +22,63 @@ app.use((req, res, next) => {
     next();
 });
 
+// In development, serve extension files locally to avoid HTTPS issues
+if (isDevelopment) {
+    // Serve modified product.json with HTTP scheme for development
+    app.get('/product.json', (req, res) => {
+        console.log('📦 Serving development product.json');
+        try {
+            const productJsonPath = path.join(__dirname, 'product.json');
+            let productConfig = JSON.parse(fs.readFileSync(productJsonPath, 'utf8'));
+            
+            // Modify additionalBuiltinExtensions to use HTTP scheme for development
+            if (productConfig.additionalBuiltinExtensions) {
+                productConfig.additionalBuiltinExtensions = productConfig.additionalBuiltinExtensions.map(ext => {
+                    if (ext.scheme === 'https') {
+                        return {
+                            ...ext,
+                            scheme: 'http'
+                        };
+                    }
+                    return ext;
+                });
+            }
+            
+            res.setHeader('Content-Type', 'application/json');
+            res.json(productConfig);
+        } catch (error) {
+            console.error('Error serving product.json:', error);
+            res.status(500).json({ error: 'Failed to load product.json' });
+        }
+    });
+
+    app.use('/extension', (req, res, next) => {
+        console.log(`📦 Serving extension file: ${req.url}`);
+        const extensionPath = path.join(__dirname, 'extension');
+        
+        // Serve files from the extension directory
+        const filePath = path.join(extensionPath, req.url);
+        
+        if (fs.existsSync(filePath)) {
+            const stat = fs.statSync(filePath);
+            if (stat.isFile()) {
+                // Set appropriate content type
+                if (req.url.endsWith('.json')) {
+                    res.setHeader('Content-Type', 'application/json');
+                } else if (req.url.endsWith('.js')) {
+                    res.setHeader('Content-Type', 'application/javascript');
+                }
+                
+                res.sendFile(filePath);
+                return;
+            }
+        }
+        
+        // If file not found, continue to next middleware
+        next();
+    });
+}
+
 // Live reload support for development
 if (isDevelopment) {
     let extensionLastModified = getExtensionLastModified();

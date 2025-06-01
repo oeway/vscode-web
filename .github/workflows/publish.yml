@@ -53,6 +53,10 @@ jobs:
         working-directory: hypha-workspace
         run: npm run build
 
+      - name: Add .nojekyll file
+        working-directory: hypha-workspace/deploy
+        run: touch .nojekyll
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:

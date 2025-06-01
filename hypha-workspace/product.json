@@ -23,7 +23,7 @@
   },
   "additionalBuiltinExtensions": [
     {
-      "scheme": "http",
+      "scheme": "https",
       "path": "/extension"
     }
   ]
