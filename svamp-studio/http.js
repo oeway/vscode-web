@@ -55,8 +55,8 @@ function getExtensionLastModified() {
 // Handle missing manifest.json
 app.get('/vscode-web/manifest.json', (req, res) => {
     res.json({
-        "name": "Svamp Studio",
-        "short_name": "Svamp Studio",
+        "name": "Hypha Workspace",
+        "short_name": "Hypha Workspace",
         "start_url": "/",
         "display": "standalone",
         "background_color": "#1e1e1e",

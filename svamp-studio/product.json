@@ -1,9 +1,9 @@
 {
   "productConfiguration": {
-    "nameShort": "Svamp Studio",
-    "nameLong": "Svamp Studio - Hypha Integration",
-    "applicationName": "svamp-studio",
-    "dataFolderName": ".svamp-studio",
+    "nameShort": "Hypha Workspace",
+    "nameLong": "Hypha Workspace - Hypha Integration",
+    "applicationName": "hypha-workspace",
+    "dataFolderName": ".hypha-workspace",
     "version": "1.75.0",
     "extensionsGallery": {
       "serviceUrl": "https://open-vsx.org/vscode/gallery",
@@ -11,7 +11,7 @@
       "resourceUrlTemplate": "https://openvsxorg.blob.core.windows.net/resources/{publisher}/{name}/{version}/{path}"
     },
     "extensionEnabledApiProposals": {
-      "svamp.svamp-studio-extension": [
+      "svamp.hypha-workspace-extension": [
         "fileSearchProvider",
         "textSearchProvider"
       ]

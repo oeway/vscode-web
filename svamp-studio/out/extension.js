@@ -29,7 +29,7 @@ const HyphaFileSystemProvider_1 = require("./providers/HyphaFileSystemProvider")
 const HyphaAuthProvider_1 = require("./providers/HyphaAuthProvider");
 const WelcomePage_1 = require("./components/WelcomePage");
 function activate(context) {
-    console.log('🚀 Svamp Studio extension is now active!');
+    console.log('🚀 Hypha Workspace extension is now active!');
     // Initialize authentication provider
     const authProvider = new HyphaAuthProvider_1.HyphaAuthProvider(context);
     console.log('✅ Auth provider initialized');
@@ -44,11 +44,11 @@ function activate(context) {
     context.subscriptions.push(disposable);
     console.log('✅ File system provider registered for hypha:// scheme');
     // Register commands
-    const welcomeCommand = vscode.commands.registerCommand('svamp-studio.welcome', () => {
+    const welcomeCommand = vscode.commands.registerCommand('hypha-workspace.welcome', () => {
         console.log('💡 Welcome command executed');
         (0, WelcomePage_1.showWelcomePage)(context, authProvider);
     });
-    const loginCommand = vscode.commands.registerCommand('svamp-studio.login', async () => {
+    const loginCommand = vscode.commands.registerCommand('hypha-workspace.login', async () => {
         console.log('🔐 Login command executed');
         const success = await authProvider.login();
         if (success) {
@@ -58,12 +58,12 @@ function activate(context) {
             console.log('❌ Login failed');
         }
     });
-    const logoutCommand = vscode.commands.registerCommand('svamp-studio.logout', async () => {
+    const logoutCommand = vscode.commands.registerCommand('hypha-workspace.logout', async () => {
         console.log('🔓 Logout command executed');
         await authProvider.logout();
         console.log('✅ Logout completed');
     });
-    const browseProjectsCommand = vscode.commands.registerCommand('svamp-studio.browseProjects', async () => {
+    const browseProjectsCommand = vscode.commands.registerCommand('hypha-workspace.browseProjects', async () => {
         console.log('📁 Browse projects command executed');
         try {
             // Use hypha:// scheme consistently
@@ -85,11 +85,11 @@ function activate(context) {
     // Show welcome page on first activation
     console.log('📄 Showing welcome page');
     (0, WelcomePage_1.showWelcomePage)(context, authProvider);
-    console.log('🎉 Svamp Studio extension activation complete!');
+    console.log('🎉 Hypha Workspace extension activation complete!');
 }
 exports.activate = activate;
 function deactivate() {
-    console.log('👋 Svamp Studio extension is deactivated');
+    console.log('👋 Hypha Workspace extension is deactivated');
 }
 exports.deactivate = deactivate;
 //# sourceMappingURL=extension.js.map

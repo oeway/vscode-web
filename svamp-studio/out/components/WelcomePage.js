@@ -26,7 +26,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.showWelcomePage = void 0;
 const vscode = __importStar(require("vscode"));
 function showWelcomePage(context, authProvider) {
-    const panel = vscode.window.createWebviewPanel('svamp-studio-welcome', 'Welcome to Svamp Studio', vscode.ViewColumn.One, {
+    const panel = vscode.window.createWebviewPanel('hypha-workspace-welcome', 'Welcome to Hypha Workspace', vscode.ViewColumn.One, {
         enableScripts: true,
         retainContextWhenHidden: true
     });
@@ -92,7 +92,7 @@ function getWebviewContent(isAuthenticated, user) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Welcome to Svamp Studio</title>
+    <title>Welcome to Hypha Workspace</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
@@ -186,7 +186,7 @@ function getWebviewContent(isAuthenticated, user) {
 <body>
     <div class="container">
         <div class="header">
-            <h1>🧪 Svamp Studio</h1>
+            <h1>🧪 Hypha Workspace</h1>
             <p>Your tailored VS Code environment for Hypha server integration</p>
         </div>
 
@@ -222,7 +222,7 @@ function getWebviewContent(isAuthenticated, user) {
         </div>
 
         <div style="text-align: center; opacity: 0.7; font-size: 0.9em;">
-            <p>Svamp Studio v1.0.0 | Powered by Hypha</p>
+            <p>Hypha Workspace v1.0.0 | Powered by Hypha</p>
         </div>
     </div>
 

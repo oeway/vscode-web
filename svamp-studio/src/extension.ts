@@ -4,7 +4,7 @@ import { HyphaAuthProvider } from './providers/HyphaAuthProvider';
 import { showWelcomePage } from './components/WelcomePage';
 
 export function activate(context: vscode.ExtensionContext) {
-    console.log('🚀 Svamp Studio extension is now active!');
+    console.log('🚀 Hypha Workspace extension is now active!');
 
     // Initialize authentication provider
     const authProvider = new HyphaAuthProvider(context);
@@ -24,12 +24,12 @@ export function activate(context: vscode.ExtensionContext) {
     console.log('✅ File system provider registered for hypha:// scheme');
 
     // Register commands
-    const welcomeCommand = vscode.commands.registerCommand('svamp-studio.welcome', () => {
+    const welcomeCommand = vscode.commands.registerCommand('hypha-workspace.welcome', () => {
         console.log('💡 Welcome command executed');
         showWelcomePage(context, authProvider);
     });
 
-    const loginCommand = vscode.commands.registerCommand('svamp-studio.login', async () => {
+    const loginCommand = vscode.commands.registerCommand('hypha-workspace.login', async () => {
         console.log('🔐 Login command executed');
         const success = await authProvider.login();
         if (success) {
@@ -39,13 +39,13 @@ export function activate(context: vscode.ExtensionContext) {
         }
     });
 
-    const logoutCommand = vscode.commands.registerCommand('svamp-studio.logout', async () => {
+    const logoutCommand = vscode.commands.registerCommand('hypha-workspace.logout', async () => {
         console.log('🔓 Logout command executed');
         await authProvider.logout();
         console.log('✅ Logout completed');
     });
 
-    const browseProjectsCommand = vscode.commands.registerCommand('svamp-studio.browseProjects', async () => {
+    const browseProjectsCommand = vscode.commands.registerCommand('hypha-workspace.browseProjects', async () => {
         console.log('📁 Browse projects command executed');
         try {
             // Use hypha:// scheme consistently
@@ -70,9 +70,9 @@ export function activate(context: vscode.ExtensionContext) {
     console.log('📄 Showing welcome page');
     showWelcomePage(context, authProvider);
     
-    console.log('🎉 Svamp Studio extension activation complete!');
+    console.log('🎉 Hypha Workspace extension activation complete!');
 }
 
 export function deactivate() {
-    console.log('👋 Svamp Studio extension is deactivated');
+    console.log('👋 Hypha Workspace extension is deactivated');
 } 

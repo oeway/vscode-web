@@ -1,5 +1,5 @@
 {
-  "name": "svamp-studio",
+  "name": "hypha-workspace",
   "version": "1.0.0",
   "description": "Tailored VS Code studio for Hypha server integration",
   "scripts": {

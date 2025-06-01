@@ -3,8 +3,8 @@ import { HyphaAuthProvider } from '../providers/HyphaAuthProvider';
 
 export function showWelcomePage(context: vscode.ExtensionContext, authProvider: HyphaAuthProvider) {
     const panel = vscode.window.createWebviewPanel(
-        'svamp-studio-welcome',
-        'Welcome to Svamp Studio',
+        'hypha-workspace-welcome',
+        'Welcome to Hypha Workspace',
         vscode.ViewColumn.One,
         {
             enableScripts: true,
@@ -82,7 +82,7 @@ function getWebviewContent(isAuthenticated: boolean, user: any): string {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Welcome to Svamp Studio</title>
+    <title>Welcome to Hypha Workspace</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
@@ -176,7 +176,7 @@ function getWebviewContent(isAuthenticated: boolean, user: any): string {
 <body>
     <div class="container">
         <div class="header">
-            <h1>🧪 Svamp Studio</h1>
+            <h1>🧪 Hypha Workspace</h1>
             <p>Your tailored VS Code environment for Hypha server integration</p>
         </div>
 
@@ -212,7 +212,7 @@ function getWebviewContent(isAuthenticated: boolean, user: any): string {
         </div>
 
         <div style="text-align: center; opacity: 0.7; font-size: 0.9em;">
-            <p>Svamp Studio v1.0.0 | Powered by Hypha</p>
+            <p>Hypha Workspace v1.0.0 | Powered by Hypha</p>
         </div>
     </div>
 

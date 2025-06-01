@@ -1,6 +1,6 @@
 {
-  "name": "svamp-studio-extension",
-  "displayName": "Svamp Studio",
+  "name": "hypha-workspace-extension",
+  "displayName": "Hypha Workspace",
   "description": "Hypha integration for VS Code",
   "version": "1.0.0",
   "publisher": "svamp",
@@ -13,24 +13,24 @@
   "contributes": {
     "commands": [
       {
-        "command": "svamp-studio.welcome",
+        "command": "hypha-workspace.welcome",
         "title": "Welcome",
-        "category": "Svamp Studio"
+        "category": "Hypha Workspace"
       },
       {
-        "command": "svamp-studio.login",
+        "command": "hypha-workspace.login",
         "title": "Login to Hypha",
-        "category": "Svamp Studio"
+        "category": "Hypha Workspace"
       },
       {
-        "command": "svamp-studio.logout",
+        "command": "hypha-workspace.logout",
         "title": "Logout from Hypha",
-        "category": "Svamp Studio"
+        "category": "Hypha Workspace"
       },
       {
-        "command": "svamp-studio.browseProjects",
+        "command": "hypha-workspace.browseProjects",
         "title": "Browse Hypha Projects",
-        "category": "Svamp Studio"
+        "category": "Hypha Workspace"
       }
     ]
   }

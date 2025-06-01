@@ -1,6 +1,6 @@
-# Svamp Studio
+# Hypha Workspace
 
-Svamp Studio is a tailored VS Code environment designed for seamless integration with the Hypha server ecosystem. It provides a complete development environment with authentication, file system integration, and real-time collaboration features.
+Hypha Workspace is a tailored VS Code environment designed for seamless integration with the Hypha server ecosystem. It provides a complete development environment with authentication, file system integration, and real-time collaboration features.
 
 ## Features
 
@@ -42,7 +42,7 @@ npm start
 
 ## Live Debugging
 
-Svamp Studio includes comprehensive live reload support:
+Hypha Workspace includes comprehensive live reload support:
 
 ### Automatic Extension Reloading
 - Extension rebuilds automatically when source files change
@@ -78,7 +78,7 @@ Svamp Studio includes comprehensive live reload support:
 ## Project Structure
 
 ```
-svamp-studio/
+hypha-workspace/
 ├── src/
 │   ├── components/          # UI components
 │   │   └── WelcomePage.ts   # Welcome page webview
@@ -119,10 +119,10 @@ svamp-studio/
 
 Available in Command Palette (`Ctrl+Shift+P`):
 
-- `Svamp Studio: Welcome` - Open welcome page
-- `Svamp Studio: Login` - Authenticate with Hypha
-- `Svamp Studio: Logout` - Sign out from Hypha
-- `Svamp Studio: Browse Projects` - Open project browser
+- `Hypha Workspace: Welcome` - Open welcome page
+- `Hypha Workspace: Login` - Authenticate with Hypha
+- `Hypha Workspace: Logout` - Sign out from Hypha
+- `Hypha Workspace: Browse Projects` - Open project browser
 
 ## Development Tips
 
