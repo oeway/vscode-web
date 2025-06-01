@@ -1,0 +1,58 @@
+# This workflow will run tests using node and then publish a package to GitHub Packages when a release is created
+# For more information see: https://help.github.com/actions/language-and-framework-guides/publishing-nodejs-packages
+
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: hypha-workspace/package-lock.json
+
+      - name: Setup Build Environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential g++ libx11-dev libxkbfile-dev libsecret-1-dev libkrb5-dev python-is-python3
+
+      - name: Install dependencies
+        working-directory: hypha-workspace
+        run: npm ci
+
+      - name: Build hypha-workspace
+        working-directory: hypha-workspace
+        run: npm run build
+
+      - name: Create deployment directory
+        run: |
+          mkdir -p deploy
+          cp -r hypha-workspace/dist/* deploy/
+          cp -r hypha-workspace/out/* deploy/ 2>/dev/null || true
+          cp hypha-workspace/index.html deploy/
+          
+      - name: Add .nojekyll file
+        run: touch deploy/.nojekyll
+
+      - name: Add CNAME file
+        run: echo "ws.aicell.io" > deploy/CNAME
+
+      - name: Deploy to GitHub Pages
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./deploy
+          force_orphan: true
