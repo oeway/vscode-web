@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Tailored VS Code studio for Hypha server integration",
   "scripts": {
-    "build": "webpack --mode production && cp dist/extension.js extension/",
+    "build": "webpack --mode production && cp dist/extension.js extension/ && node build-deploy.js",
     "dev": "webpack --mode development --watch",
     "start": "npm run build && NODE_ENV=production node http.js",
     "start:dev": "concurrently \"npm run dev\" \"nodemon --exec 'cp dist/extension.js extension/ && echo Extension updated' --watch dist\" \"NODE_ENV=development node http.js\"",

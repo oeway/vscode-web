@@ -70,6 +70,59 @@ app.use('/static', serveStatic('./node_modules/vscode-web/dist'))
 // Serve static files (matches sample exactly)
 app.use(serveStatic(staticBasePath))
 
+// Custom middleware to inject live reload script in development
+app.get('/', (req, res) => {
+    const indexPath = path.join(staticBasePath, 'index.html');
+    
+    if (fs.existsSync(indexPath)) {
+        let indexContent = fs.readFileSync(indexPath, 'utf8');
+        
+        // Inject live reload script in development mode
+        if (process.env.NODE_ENV === 'development') {
+            const liveReloadScript = `
+	<!-- Live reload for development -->
+	<script>
+		// Live reload script for development
+		if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+			let lastModified = 0;
+			
+			function checkForUpdates() {
+				fetch('/api/extension-status')
+					.then(response => response.json())
+					.then(status => {
+						if (status.needsReload && status.lastModified > lastModified) {
+							console.log('📦 Extension updated, reloading...');
+							
+							// Notify server that we're reloading
+							fetch('/api/extension-reloaded', { method: 'POST' }).catch(() => {});
+							
+							// Reload the page
+							window.location.reload();
+						}
+					})
+					.catch(error => {
+						console.warn('Live reload check failed:', error);
+					});
+			}
+			
+			// Check for updates every 2 seconds
+			setInterval(checkForUpdates, 2000);
+			console.log('🔥 Live reload enabled');
+		}
+	</script>
+</html>`;
+            
+            // Replace closing </html> tag with live reload script + closing tag
+            indexContent = indexContent.replace('</html>', liveReloadScript);
+        }
+        
+        res.setHeader('Content-Type', 'text/html');
+        res.send(indexContent);
+    } else {
+        res.status(404).send('index.html not found');
+    }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT)
 console.log(`Listening on port ${PORT}`); 

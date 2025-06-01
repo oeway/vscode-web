@@ -53,38 +53,10 @@ jobs:
         working-directory: hypha-workspace
         run: npm run build
 
-      - name: Create deployment directory
-        run: |
-          mkdir -p deploy
-          cp -r hypha-workspace/dist/* deploy/
-          cp -r hypha-workspace/out/* deploy/ 2>/dev/null || true
-          cp hypha-workspace/index.html deploy/
-          
-          # Copy vscode-web files to static directory (proper approach)
-          mkdir -p deploy/static
-          if [ -d "hypha-workspace/node_modules/vscode-web/dist" ]; then
-            cp -r hypha-workspace/node_modules/vscode-web/dist/* deploy/static/
-          fi
-          
-          # Copy vscode-web assets to vscode-web directory
-          mkdir -p deploy/vscode-web
-          if [ -f "hypha-workspace/node_modules/vscode-web/dist/favicon.ico" ]; then
-            cp hypha-workspace/node_modules/vscode-web/dist/favicon.ico deploy/vscode-web/
-          fi
-          if [ -f "hypha-workspace/node_modules/vscode-web/dist/manifest.json" ]; then
-            cp hypha-workspace/node_modules/vscode-web/dist/manifest.json deploy/vscode-web/
-          fi
-
-      - name: Add .nojekyll file
-        run: touch deploy/.nojekyll
-
-      - name: Add CNAME file
-        run: echo "ws.aicell.io" > deploy/CNAME
-
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./deploy
+          path: ./hypha-workspace/deploy
 
       - name: Deploy to GitHub Pages
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
