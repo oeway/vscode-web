@@ -64,6 +64,9 @@ app.get('/vscode-web/manifest.json', (req, res) => {
     });
 });
 
+// Serve vscode-web files at /static/ path to match production deployment
+app.use('/static', serveStatic('./node_modules/vscode-web/dist'))
+
 // Serve static files (matches sample exactly)
 app.use(serveStatic(staticBasePath))
 
