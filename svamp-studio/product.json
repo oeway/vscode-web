@@ -1,0 +1,31 @@
+{
+  "productConfiguration": {
+    "nameShort": "Svamp Studio",
+    "nameLong": "Svamp Studio - Hypha Integration",
+    "applicationName": "svamp-studio",
+    "dataFolderName": ".svamp-studio",
+    "version": "1.75.0",
+    "extensionsGallery": {
+      "serviceUrl": "https://open-vsx.org/vscode/gallery",
+      "itemUrl": "https://open-vsx.org/vscode/item",
+      "resourceUrlTemplate": "https://openvsxorg.blob.core.windows.net/resources/{publisher}/{name}/{version}/{path}"
+    },
+    "extensionEnabledApiProposals": {
+      "svamp.svamp-studio-extension": [
+        "fileSearchProvider",
+        "textSearchProvider"
+      ]
+    }
+  },
+  "folderUri": {
+    "scheme": "hypha",
+    "authority": "agent-lab-projects",
+    "path": "/"
+  },
+  "additionalBuiltinExtensions": [
+    {
+      "scheme": "http",
+      "path": "/extension"
+    }
+  ]
+} 

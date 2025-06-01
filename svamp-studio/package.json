@@ -1,0 +1,41 @@
+{
+  "name": "svamp-studio",
+  "version": "1.0.0",
+  "description": "Tailored VS Code studio for Hypha server integration",
+  "scripts": {
+    "build": "webpack --mode production && cp dist/extension.js extension/",
+    "dev": "webpack --mode development --watch",
+    "start": "npm run build && NODE_ENV=production node http.js",
+    "start:dev": "concurrently \"npm run dev\" \"nodemon --exec 'cp dist/extension.js extension/ && echo Extension updated' --watch dist\" \"NODE_ENV=development node http.js\"",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "keywords": [
+    "vscode",
+    "hypha",
+    "extension"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.7.9",
+    "express": "^4.17.1",
+    "hypha-rpc": "^0.20.54",
+    "serve-static": "^1.16.2",
+    "vscode-web": "^1.75.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.75.0",
+    "buffer": "^6.0.3",
+    "concurrently": "^7.6.0",
+    "nodemon": "^3.0.0",
+    "path-browserify": "^1.0.1",
+    "querystring-es3": "^0.2.1",
+    "ts-loader": "^9.4.0",
+    "typescript": "^4.9.5",
+    "url": "^0.11.4",
+    "webpack": "^5.0.0",
+    "webpack-cli": "^5.0.0"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "watch": ["http.js", "index.html"],
+  "ext": "js,html",
+  "env": {
+    "NODE_ENV": "development"
+  },
+  "delay": "1000"
+} 

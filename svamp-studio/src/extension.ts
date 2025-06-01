@@ -1,0 +1,82 @@
+import * as vscode from 'vscode';
+import { HyphaFileSystemProvider } from './providers/HyphaFileSystemProvider';
+import { HyphaAuthProvider } from './providers/HyphaAuthProvider';
+import { showWelcomePage } from './components/WelcomePage';
+
+export function activate(context: vscode.ExtensionContext) {
+    console.log('🚀 Svamp Studio extension is now active!');
+
+    // Initialize authentication provider
+    const authProvider = new HyphaAuthProvider(context);
+    console.log('✅ Auth provider initialized');
+    
+    // Initialize filesystem provider
+    const fileSystemProvider = new HyphaFileSystemProvider(authProvider);
+    console.log('✅ File system provider initialized');
+    
+    // Register filesystem provider
+    const disposable = vscode.workspace.registerFileSystemProvider('hypha', fileSystemProvider, {
+        isCaseSensitive: true,
+        isReadonly: false
+    });
+    
+    context.subscriptions.push(disposable);
+    console.log('✅ File system provider registered for hypha:// scheme');
+
+    // Register commands
+    const welcomeCommand = vscode.commands.registerCommand('svamp-studio.welcome', () => {
+        console.log('💡 Welcome command executed');
+        showWelcomePage(context, authProvider);
+    });
+
+    const loginCommand = vscode.commands.registerCommand('svamp-studio.login', async () => {
+        console.log('🔐 Login command executed');
+        const success = await authProvider.login();
+        if (success) {
+            console.log('✅ Login successful');
+        } else {
+            console.log('❌ Login failed');
+        }
+    });
+
+    const logoutCommand = vscode.commands.registerCommand('svamp-studio.logout', async () => {
+        console.log('🔓 Logout command executed');
+        await authProvider.logout();
+        console.log('✅ Logout completed');
+    });
+
+    const browseProjectsCommand = vscode.commands.registerCommand('svamp-studio.browseProjects', async () => {
+        console.log('📁 Browse projects command executed');
+        try {
+            // Use hypha:// scheme consistently
+            const uri = vscode.Uri.parse('hypha://agent-lab-projects');
+            console.log('📁 Opening folder with URI:', uri.toString());
+        await vscode.commands.executeCommand('vscode.openFolder', uri);
+            console.log('✅ Folder opened successfully');
+        } catch (error) {
+            console.error('❌ Failed to open folder:', error);
+            vscode.window.showErrorMessage(`Failed to open Hypha projects: ${error}`);
+        }
+    });
+
+    // Add commands to subscriptions
+    context.subscriptions.push(welcomeCommand, loginCommand, logoutCommand, browseProjectsCommand);
+    console.log('✅ Commands registered');
+
+    // Monitor authentication state
+    setInterval(() => {
+        const isAuth = authProvider.isAuthenticated();
+        const user = authProvider.getUser();
+        console.log('🔍 Auth status check - Authenticated:', isAuth, 'User:', user?.email || 'none');
+    }, 30000); // Check every 30 seconds
+
+    // Show welcome page on first activation
+    console.log('📄 Showing welcome page');
+    showWelcomePage(context, authProvider);
+    
+    console.log('🎉 Svamp Studio extension activation complete!');
+}
+
+export function deactivate() {
+    console.log('👋 Svamp Studio extension is deactivated');
+} 

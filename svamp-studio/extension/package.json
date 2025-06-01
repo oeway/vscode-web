@@ -1,0 +1,37 @@
+{
+  "name": "svamp-studio-extension",
+  "displayName": "Svamp Studio",
+  "description": "Hypha integration for VS Code",
+  "version": "1.0.0",
+  "publisher": "svamp",
+  "private": true,
+  "activationEvents": ["onFileSystem:hypha", "onDebug"],
+  "browser": "./extension.js",
+  "engines": {
+    "vscode": "^1.48.0"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "svamp-studio.welcome",
+        "title": "Welcome",
+        "category": "Svamp Studio"
+      },
+      {
+        "command": "svamp-studio.login",
+        "title": "Login to Hypha",
+        "category": "Svamp Studio"
+      },
+      {
+        "command": "svamp-studio.logout",
+        "title": "Logout from Hypha",
+        "category": "Svamp Studio"
+      },
+      {
+        "command": "svamp-studio.browseProjects",
+        "title": "Browse Hypha Projects",
+        "category": "Svamp Studio"
+      }
+    ]
+  }
+} 

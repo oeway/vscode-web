@@ -1,6 +1,6 @@
 {
   "name": "vscode-web",
-  "version": "1.92.0",
+  "version": "1.100.2",
   "description": "Visual Studio Code for browser",
   "files": [
     "dist"
@@ -21,6 +21,7 @@
   },
   "homepage": "https://github.com/Felx-B/vscode-web#readme",
   "devDependencies": {
+    "@stagewise/toolbar": "^0.2.1",
     "express": "^4.17.1",
     "fs-extra": "^9.0.1"
   },
