@@ -17,6 +17,12 @@ export class HyphaAuthProvider {
     private client: any = null;
     private server: any = null;
     private readonly serverUrl = "https://hypha.aicell.io";
+    private isConnecting = false;
+    private connectionPromise: Promise<any> | null = null;
+    
+    // Event emitters for reactive updates
+    private _onAuthStateChanged = new vscode.EventEmitter<{ isAuthenticated: boolean; user: HyphaUser | null }>();
+    readonly onAuthStateChanged = this._onAuthStateChanged.event;
 
     constructor(context: vscode.ExtensionContext) {
         console.log('🔐 Initializing HyphaAuthProvider');
@@ -60,6 +66,9 @@ export class HyphaAuthProvider {
         await this.context.workspaceState.update('hyphaTokenExpiry', 
             new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString());
         console.log('💾 Authentication data saved successfully');
+        
+        // Fire auth state changed event
+        this.fireAuthStateChanged();
     }
 
     private async clearAuth() {
@@ -68,11 +77,16 @@ export class HyphaAuthProvider {
         this.user = null;
         this.client = null;
         this.server = null;
+        this.isConnecting = false;
+        this.connectionPromise = null;
         
         await this.context.workspaceState.update('hyphaToken', undefined);
         await this.context.workspaceState.update('hyphaUser', undefined);
         await this.context.workspaceState.update('hyphaTokenExpiry', undefined);
         console.log('🗑️ Authentication data cleared');
+        
+        // Fire auth state changed event
+        this.fireAuthStateChanged();
     }
 
     async login(): Promise<boolean> {
@@ -175,25 +189,103 @@ export class HyphaAuthProvider {
         return this.token;
     }
 
-    getServer(): any {
-        return this.server;
+    async getServer(): Promise<any> {
+        // If we already have a server connection, return it
+        if (this.server) {
+            console.log('🔗 Server connection already available');
+            return this.server;
+        }
+
+        // If we're already in the process of connecting, wait for that to complete
+        if (this.isConnecting && this.connectionPromise) {
+            console.log('🔄 Connection already in progress, waiting...');
+            try {
+                await this.connectionPromise;
+                return this.server;
+            } catch (error) {
+                console.error('❌ Connection in progress failed:', error);
+                throw error;
+            }
+        }
+
+        // If we have a valid token but no server connection, attempt to connect
+        if (this.token && this.isTokenValid()) {
+            console.log('🔄 No server connection but valid token available, attempting to connect');
+            this.isConnecting = true;
+            this.connectionPromise = this.connectWithExistingToken();
+            
+            try {
+                await this.connectionPromise;
+                return this.server;
+            } catch (error) {
+                console.error('❌ Failed to connect with existing token:', error);
+                await this.clearAuth();
+                throw new Error('Failed to establish server connection with existing token');
+            } finally {
+                this.isConnecting = false;
+                this.connectionPromise = null;
+            }
+        }
+
+        // No valid token available, need to authenticate
+        console.log('❌ No server connection and no valid token - authentication required');
+        throw new Error('No server connection available - authentication required. Please login first.');
+    }
+
+    private async connectWithExistingToken(): Promise<void> {
+        if (!this.token) {
+            throw new Error('No token available for connection');
+        }
+        
+        try {
+            await this.connect(this.token);
+            console.log('✅ Successfully connected with existing token');
+        } catch (error) {
+            console.error('❌ Failed to connect with existing token:', error);
+            throw error;
+        }
+    }
+
+    async ensureConnection(): Promise<any> {
+        try {
+            return await this.getServer();
+        } catch (error) {
+            console.log('🔐 Connection failed, prompting for login');
+            vscode.window.showWarningMessage(
+                'Hypha server connection required. Please login to continue.',
+                'Login'
+            ).then(selection => {
+                if (selection === 'Login') {
+                    vscode.commands.executeCommand('hypha.login');
+                }
+            });
+            throw error;
+        }
     }
 
     async getArtifactManager(): Promise<any> {
         console.log('🎯 Getting artifact manager service');
-        if (!this.server) {
-            console.log('❌ Not connected to Hypha server - cannot get artifact manager');
-            throw new Error('Not connected to Hypha server');
-        }
+        const server = await this.getServer();
         
         try {
             console.log('🎯 Requesting artifact manager service from server');
-            const artifactManager = await this.server.getService("public/artifact-manager");
+            const artifactManager = await server.getService("public/artifact-manager");
             console.log('🎯 Artifact manager service obtained successfully');
             return artifactManager;
         } catch (error) {
             console.error('❌ Failed to get artifact manager:', error);
             throw error;
         }
+    }
+
+    private fireAuthStateChanged() {
+        const isAuthenticated = this.isAuthenticated();
+        console.log('🔄 Firing auth state changed event - authenticated:', isAuthenticated, 'user:', this.user?.email || 'none');
+        this._onAuthStateChanged.fire({ isAuthenticated, user: this.user });
+    }
+
+    dispose() {
+        console.log('🗑️ Disposing HyphaAuthProvider');
+        this._onAuthStateChanged.dispose();
     }
 } 

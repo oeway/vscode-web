@@ -112,6 +112,7 @@ if (project1Artifact) {
   const files = await artifactManager.list_files({
     artifact_id: 'project1',
     dir_path: 'src',
+    version: 'stage',
     _rkwargs: true
   });
   // Look for main.js in the src directory
@@ -120,6 +121,7 @@ if (project1Artifact) {
   const files = await artifactManager.list_files({
     artifact_id: 'agent-lab-projects',
     dir_path: 'project1/src',
+    version: 'stage',
     _rkwargs: true
   });
 }

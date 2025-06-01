@@ -55,13 +55,15 @@ export function showWelcomePage(context: vscode.ExtensionContext, authProvider: 
     // Set initial HTML content
     updateWebviewContent(panel, authProvider);
     
-    // Update content when auth state changes
-    const updateInterval = setInterval(() => {
+    // Update content reactively when auth state changes
+    const authStateSubscription = authProvider.onAuthStateChanged((authState) => {
+        console.log('🔄 Auth state changed, updating webview content');
         updateWebviewContent(panel, authProvider);
-    }, 1000);
+    });
 
     panel.onDidDispose(() => {
-        clearInterval(updateInterval);
+        console.log('🗑️ Disposing welcome page resources');
+        authStateSubscription.dispose();
     });
 
     return panel;
@@ -206,10 +208,6 @@ function getWebviewContent(isAuthenticated: boolean, user: any): string {
             <div class="feature">
                 <h3>🛠️ Artifact Manager</h3>
                 <p>Leverage the Hypha Artifact Manager for managing datasets, models, and applications.</p>
-            </div>
-            <div class="feature">
-                <h3>🔒 Secure Access</h3>
-                <p>Your authentication token is securely stored in the workspace for seamless access.</p>
             </div>
         </div>
 

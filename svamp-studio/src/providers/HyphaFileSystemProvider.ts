@@ -27,12 +27,260 @@ export class HyphaFileSystemProvider implements vscode.FileSystemProvider {
     private authProvider: HyphaAuthProvider;
     private _emitter = new vscode.EventEmitter<vscode.FileChangeEvent[]>();
     private _cache = new Map<string, Uint8Array>();
+    private artifactManager: any = null;
+    private isInitializing = false;
+    private initializationPromise: Promise<void> | null = null;
+    private lastInitAttempt = 0;
+    private initCooldown = 5000; // 5 seconds cooldown between init attempts
+    private artifactCache = new Map<string, { artifact: any | null; timestamp: number }>();
+    private cacheTimeout = 300000; // 5 minutes cache for artifacts
 
     readonly onDidChangeFile: vscode.Event<vscode.FileChangeEvent[]> = this._emitter.event;
 
     constructor(authProvider: HyphaAuthProvider) {
         this.authProvider = authProvider;
-        console.log('🗂️ HyphaFileSystemProvider initialized');
+        console.log('🗂️ HyphaFileSystemProvider initialized, starting artifact manager initialization');
+        this.initializeArtifactManager();
+    }
+
+    private async getArtifactCached(artifactId: string): Promise<any | null> {
+        const now = Date.now();
+        const cached = this.artifactCache.get(artifactId);
+        
+        if (cached && (now - cached.timestamp) < this.cacheTimeout) {
+            console.log('🎯 Using cached artifact for', artifactId, ':', cached.artifact?.manifest?.name || 'null');
+            return cached.artifact;
+        }
+        
+        try {
+            console.log('🔄 Fetching fresh artifact data for', artifactId);
+            const artifact = await this.getArtifact(artifactId);
+            
+            // Cache the result (including null results)
+            this.artifactCache.set(artifactId, { artifact, timestamp: now });
+            
+            if (artifact) {
+                console.log('🎯 Cached artifact for', artifactId, ':', artifact.manifest?.name, 'type:', artifact.type);
+            } else {
+                console.log('🎯 Cached not-found result for', artifactId);
+            }
+            
+            return artifact;
+        } catch (error) {
+            console.error('❌ Failed to get artifact for', artifactId, ':', error);
+            
+            // Cache error results to avoid repeated attempts
+            this.artifactCache.set(artifactId, { artifact: null, timestamp: now });
+            return null;
+        }
+    }
+
+    private async getArtifactTypeCached(artifactId: string): Promise<string | null> {
+        const artifact = await this.getArtifactCached(artifactId);
+        
+        if (artifact) {
+            const type = artifact.type || 'artifact';
+            console.log('🎯 Extracted type from cached artifact', artifactId, ':', type);
+            return type;
+        } else {
+            console.log('🎯 No artifact found for type extraction:', artifactId);
+            return null;
+        }
+    }
+
+    private invalidateArtifactCache(artifactId?: string): void {
+        if (artifactId) {
+            console.log('🗑️ Invalidating cache for artifact:', artifactId);
+            this.artifactCache.delete(artifactId);
+        } else {
+            console.log('🗑️ Clearing entire artifact cache');
+            this.artifactCache.clear();
+        }
+    }
+
+    private clearExpiredCache(): void {
+        const now = Date.now();
+        const expiredKeys: string[] = [];
+        
+        for (const [key, cached] of this.artifactCache.entries()) {
+            if (now - cached.timestamp >= this.cacheTimeout) {
+                expiredKeys.push(key);
+            }
+        }
+        
+        if (expiredKeys.length > 0) {
+            console.log('🗑️ Clearing', expiredKeys.length, 'expired cache entries');
+            expiredKeys.forEach(key => this.artifactCache.delete(key));
+        }
+    }
+
+    private async resolveArtifactPath(path: string): Promise<{ artifactId: string; filePath?: string }> {
+        console.log('🔍 Resolving artifact path:', path);
+        
+        // Remove leading slash and split into segments
+        const segments = path.substring(1).split('/').filter(s => s);
+        
+        if (segments.length === 0) {
+            // Root path - this should be handled by the workspace root logic
+            throw new Error('Cannot resolve empty path');
+        }
+        
+        let currentArtifactId = '';
+        
+        // Traverse segments to find the deepest artifact
+        for (let i = 0; i < segments.length; i++) {
+            const segment = segments[i];
+            
+            if (i === 0) {
+                // First segment - test as root artifact
+                console.log('🔍 Testing root artifact ID:', segment);
+                const artifactType = await this.getArtifactTypeCached(segment);
+                
+                if (artifactType) {
+                    currentArtifactId = segment;
+                    console.log('✅ Found root artifact:', currentArtifactId, 'type:', artifactType);
+                    
+                    if (artifactType !== 'collection') {
+                        // Not a collection, remaining segments are file path
+                        const remainingSegments = segments.slice(i + 1);
+                        const filePath = remainingSegments.length > 0 ? remainingSegments.join('/') : undefined;
+                        console.log('🎯 Final resolution - Artifact:', currentArtifactId, 'FilePath:', filePath);
+                        return { artifactId: currentArtifactId, filePath };
+                    }
+                    // Continue to check if next segment is a child artifact
+                } else {
+                    console.log('❌ Root artifact not found:', segment);
+                    throw new Error(`Root artifact '${segment}' not found`);
+                }
+            } else {
+                // For subsequent segments, if current artifact is a collection,
+                // check if this segment is a direct child artifact
+                if (currentArtifactId) {
+                    console.log('🔍 Testing child artifact:', segment, 'of parent:', currentArtifactId);
+                    
+                    // First check if the current artifact is a collection
+                    const parentType = await this.getArtifactTypeCached(currentArtifactId);
+                    if (parentType === 'collection') {
+                        // Get child artifacts to see if this segment matches
+                        const childArtifacts = await this.listChildArtifacts(currentArtifactId);
+                        const matchingChild = childArtifacts.find(child => {
+                            const childName = child.id.includes('/') ? 
+                                child.id.split('/').pop() : 
+                                child.id;
+                            return childName === segment;
+                        });
+                        
+                        if (matchingChild) {
+                            // Found matching child artifact
+                            currentArtifactId = matchingChild.id;
+                            console.log('✅ Found child artifact:', currentArtifactId);
+                            
+                            // Check if this child is also a collection or has remaining segments
+                            const childType = await this.getArtifactTypeCached(matchingChild.id);
+                            if (childType !== 'collection') {
+                                // Not a collection, remaining segments are file path
+                                const remainingSegments = segments.slice(i + 1);
+                                const filePath = remainingSegments.length > 0 ? remainingSegments.join('/') : undefined;
+                                console.log('🎯 Final resolution - Artifact:', currentArtifactId, 'FilePath:', filePath);
+                                return { artifactId: currentArtifactId, filePath };
+                            }
+                            // Continue to check next segment
+                        } else {
+                            // Segment is not a child artifact, so it's part of file path
+                            const remainingSegments = segments.slice(i);
+                            const filePath = remainingSegments.length > 0 ? remainingSegments.join('/') : undefined;
+                            console.log('🎯 Final resolution - Artifact:', currentArtifactId, 'FilePath:', filePath);
+                            return { artifactId: currentArtifactId, filePath };
+                        }
+                    } else {
+                        // Parent is not a collection, remaining segments are file path
+                        const remainingSegments = segments.slice(i);
+                        const filePath = remainingSegments.length > 0 ? remainingSegments.join('/') : undefined;
+                        console.log('🎯 Final resolution - Artifact:', currentArtifactId, 'FilePath:', filePath);
+                        return { artifactId: currentArtifactId, filePath };
+                    }
+                }
+            }
+        }
+        
+        // All segments were traversed, currentArtifactId is the final artifact
+        console.log('🎯 Final resolution - Artifact:', currentArtifactId, 'FilePath: none');
+        return { artifactId: currentArtifactId };
+    }
+
+    private async initializeArtifactManager(): Promise<void> {
+        const now = Date.now();
+        
+        // Add cooldown to prevent rapid successive calls
+        if (now - this.lastInitAttempt < this.initCooldown) {
+            console.log('🔄 Initialization cooldown active, skipping attempt');
+            return this.initializationPromise || Promise.resolve();
+        }
+
+        if (this.isInitializing || this.artifactManager) {
+            console.log('🔄 Initialization already in progress or completed');
+            return this.initializationPromise || Promise.resolve();
+        }
+
+        this.lastInitAttempt = now;
+        this.isInitializing = true;
+        this.initializationPromise = this.performInitialization();
+        return this.initializationPromise;
+    }
+
+    private async performInitialization(): Promise<void> {
+        try {
+            console.log('🔄 Initializing artifact manager...');
+            
+            // Just try to get the server connection directly
+            // Authentication will be handled by getServer() if needed
+            const server = await this.authProvider.getServer();
+            if (server) {
+                console.log('✅ Server connection established during initialization');
+                this.artifactManager = await server.getService("public/artifact-manager");
+                console.log('✅ Artifact manager initialized successfully');
+            } else {
+                console.log('❌ No server connection available');
+            }
+        } catch (error: any) {
+            console.log('⚠️ Could not establish server connection:', error.message);
+            console.log('⚠️ Authentication required - artifact manager will be unavailable');
+        } finally {
+            this.isInitializing = false;
+        }
+    }
+
+    private async ensureArtifactManager(): Promise<any> {
+        console.log('🔍 ensureArtifactManager called - current state:', {
+            hasArtifactManager: !!this.artifactManager,
+            isInitializing: this.isInitializing,
+            lastInitAttempt: this.lastInitAttempt,
+            timeSinceLastInit: Date.now() - this.lastInitAttempt
+        });
+
+        // Clean up expired cache entries periodically
+        this.clearExpiredCache();
+
+        if (!this.artifactManager) {
+            console.log('🔄 No artifact manager, attempting initialization...');
+            await this.initializeArtifactManager();
+        }
+        
+        // If still no artifact manager, try to get server connection reactively
+        if (!this.artifactManager) {
+            console.log('🔄 Still no artifact manager, trying reactive approach...');
+            try {
+                console.log('🔄 Attempting to get server connection reactively');
+                const server = await this.authProvider.getServer();
+                this.artifactManager = await server.getService("public/artifact-manager");
+                console.log('✅ Artifact manager obtained reactively');
+            } catch (error: any) {
+                console.error('❌ Failed to get artifact manager reactively:', error.message);
+                throw new Error('Artifact manager not available - authentication required. Please login first.');
+            }
+        }
+        
+        return this.artifactManager;
     }
 
     watch(uri: vscode.Uri, options: { recursive: boolean; excludes: string[]; }): vscode.Disposable {
@@ -46,54 +294,39 @@ export class HyphaFileSystemProvider implements vscode.FileSystemProvider {
         console.log('📊 Getting stat for URI:', uri.toString());
         const path = this.uriToPath(uri);
         console.log('📊 Converted to path:', path);
-        
-        if (path === '/' || path === '') {
-            // Root path - represents the agent-lab-projects workspace
-            console.log('📊 Workspace root stat (agent-lab-projects)');
-            const artifact = await this.getArtifact('agent-lab-projects');
-            if (artifact) {
-                return {
-                    type: vscode.FileType.Directory,
-                    ctime: new Date(artifact.manifest.created_at).getTime(),
-                    mtime: new Date(artifact.manifest.created_at).getTime(),
-                    size: 0
-                };
-            } else {
-                console.error('❌ Workspace root artifact not found');
-                throw vscode.FileSystemError.FileNotFound(uri);
-            }
-        }
 
-        // Parse the path to get artifact and file path
-        const { artifactId, filePath } = this.parsePath(path);
-        console.log('📊 Parsed path - artifactId:', artifactId, 'filePath:', filePath);
-        
-        if (!filePath) {
-            // This is a child artifact directory (first level under root)
-            console.log('📊 Getting child artifact stat for:', artifactId);
-            const artifact = await this.getArtifact(artifactId);
-            if (artifact) {
-                console.log('📊 Child artifact found:', artifact.manifest?.name || artifactId);
-                return {
-                    type: vscode.FileType.Directory,
-                    ctime: new Date(artifact.manifest.created_at).getTime(),
-                    mtime: new Date(artifact.manifest.created_at).getTime(),
-                    size: 0
-                };
+        try {
+            const { artifactId, filePath } = await this.resolveArtifactPath(path);
+            console.log('📊 Resolved - artifactId:', artifactId, 'filePath:', filePath);
+
+            if (!filePath) {
+                // This is an artifact directory
+                const artifact = await this.getArtifactCached(artifactId);
+                if (artifact) {
+                    console.log('📊 Artifact found:', artifact.manifest?.name || artifactId, 'type:', artifact.type);
+                    return {
+                        type: vscode.FileType.Directory,
+                        ctime: new Date(artifact.manifest?.created_at || Date.now()).getTime(),
+                        mtime: new Date(artifact.manifest?.created_at || Date.now()).getTime(),
+                        size: 0
+                    };
+                }
+            } else {
+                // This is a file within an artifact
+                console.log('📊 Getting file stat for:', filePath, 'in artifact:', artifactId);
+                const file = await this.getFileInfo(artifactId, filePath);
+                if (file) {
+                    console.log('📊 File found:', file.name, 'type:', file.type);
+                    return {
+                        type: file.type === 'directory' ? vscode.FileType.Directory : vscode.FileType.File,
+                        ctime: file.created_at ? new Date(file.created_at).getTime() : Date.now(),
+                        mtime: file.modified_at ? new Date(file.modified_at).getTime() : Date.now(),
+                        size: file.size || 0
+                    };
+                }
             }
-        } else {
-            // This is a file within a child artifact
-            console.log('📊 Getting file stat for:', filePath, 'in child artifact:', artifactId);
-            const file = await this.getFileInfo(artifactId, filePath);
-            if (file) {
-                console.log('📊 File found:', file.name, 'type:', file.type);
-                return {
-                    type: file.type === 'directory' ? vscode.FileType.Directory : vscode.FileType.File,
-                    ctime: file.created_at ? new Date(file.created_at).getTime() : Date.now(),
-                    mtime: file.modified_at ? new Date(file.modified_at).getTime() : Date.now(),
-                    size: file.size || 0
-                };
-            }
+        } catch (error) {
+            console.error('❌ Error in stat:', error);
         }
 
         console.log('❌ File not found for URI:', uri.toString());
@@ -103,47 +336,19 @@ export class HyphaFileSystemProvider implements vscode.FileSystemProvider {
     async readDirectory(uri: vscode.Uri): Promise<[string, vscode.FileType][]> {
         const path = this.uriToPath(uri);
         console.log('📁 Reading directory - URI:', uri.toString(), 'Path:', path);
-        
-        if (path === '/' || path === '') {
-            // Root path - list child artifacts of agent-lab-projects directly
-            console.log('📁 Reading workspace root - listing child artifacts of agent-lab-projects');
-            const artifact = await this.getArtifact('agent-lab-projects');
-            if (!artifact) {
-                console.log('❌ Root artifact not found');
-                throw vscode.FileSystemError.FileNotFound(uri);
-            }
 
-            if (artifact.type === 'collection') {
-                // List child artifacts directly at root level
-                console.log('📁 Root is collection, listing child artifacts at root level');
-                const projects = await this.listChildArtifacts('agent-lab-projects');
-                const result = projects.map(project => [
-                    project.id.split('/').pop() || project.id, 
-                    vscode.FileType.Directory
-                ] as [string, vscode.FileType]);
-                console.log('📁 Found', result.length, 'child artifacts at root');
-                return result;
-            } else {
-                // List files in the artifact directly at root level
-                console.log('📁 Root is artifact, listing files at root level');
-                const files = await this.listFiles('agent-lab-projects', '');
-                const result = files.map(file => [
-                    file.name,
-                    file.type === 'directory' ? vscode.FileType.Directory : vscode.FileType.File
-                ] as [string, vscode.FileType]);
-                console.log('📁 Found', result.length, 'files at root');
-                return result;
-            }
+        // Prevent infinite loops by checking for excessively long paths
+        if (path.length > 1000) {
+            console.error('❌ Path too long, possible infinite loop detected:', path.substring(0, 100) + '...');
+            throw vscode.FileSystemError.FileNotFound(uri);
         }
 
-        // Parse the path to get artifact and directory path
-        const { artifactId, filePath } = this.parsePath(path);
-        console.log('📁 Parsed path - artifactId:', artifactId, 'filePath:', filePath);
-        
-        if (!filePath) {
-            // This is a child artifact directory (first level under root)
-            console.log('📁 Reading child artifact directory:', artifactId);
-            const artifact = await this.getArtifact(artifactId);
+        try {
+            const { artifactId, filePath } = await this.resolveArtifactPath(path);
+            console.log('📁 Resolved - artifactId:', artifactId, 'filePath:', filePath);
+
+            // Get the artifact to determine its type
+            const artifact = await this.getArtifactCached(artifactId);
             if (!artifact) {
                 console.log('❌ Artifact not found:', artifactId);
                 throw vscode.FileSystemError.FileNotFound(uri);
@@ -151,52 +356,60 @@ export class HyphaFileSystemProvider implements vscode.FileSystemProvider {
 
             if (artifact.type === 'collection') {
                 // List child artifacts
-                console.log('📁 Child artifact is collection, listing its children');
+                console.log('📁 Artifact is collection, listing child artifacts');
                 const childArtifacts = await this.listChildArtifacts(artifactId);
-                const result = childArtifacts.map(child => [
-                    child.id.split('/').pop() || child.id,
-                    vscode.FileType.Directory
-                ] as [string, vscode.FileType]);
+                
+                // Better handling of child artifact names
+                const result = childArtifacts.map(child => {
+                    // Extract just the last segment of the child ID
+                    const childName = child.id.includes('/') ? 
+                        child.id.split('/').pop() || child.id : 
+                        child.id;
+                    
+                    console.log('📁 Child artifact:', child.id, '-> display name:', childName);
+                    return [childName, vscode.FileType.Directory] as [string, vscode.FileType];
+                });
+                
                 console.log('📁 Found', result.length, 'child artifacts');
                 return result;
             } else {
                 // List files in the artifact
-                console.log('📁 Child artifact has files, listing them');
-                const files = await this.listFiles(artifactId, '');
+                console.log('📁 Artifact has files, listing files in path:', filePath || '(root)');
+                const files = await this.listFiles(artifactId, filePath || '');
                 const result = files.map(file => [
                     file.name,
                     file.type === 'directory' ? vscode.FileType.Directory : vscode.FileType.File
                 ] as [string, vscode.FileType]);
-                console.log('📁 Found', result.length, 'files in child artifact');
+                console.log('📁 Found', result.length, 'files');
                 return result;
             }
-        } else {
-            // List files in a subdirectory within a child artifact
-            console.log('📁 Reading subdirectory:', filePath, 'in artifact:', artifactId);
-            const files = await this.listFiles(artifactId, filePath);
-            const result = files.map(file => [
-                file.name,
-                file.type === 'directory' ? vscode.FileType.Directory : vscode.FileType.File
-            ] as [string, vscode.FileType]);
-            console.log('📁 Found', result.length, 'files in subdirectory');
-            return result;
+        } catch (error) {
+            console.error('❌ Error in readDirectory:', error);
+            throw vscode.FileSystemError.FileNotFound(uri);
         }
     }
 
     async createDirectory(uri: vscode.Uri): Promise<void> {
         const path = this.uriToPath(uri);
-        const { artifactId, filePath } = this.parsePath(path);
         
-        if (!filePath) {
-            // Creating a new artifact (project folder)
-            const parentPath = path.substring(0, path.lastIndexOf('/'));
-            const folderName = path.substring(path.lastIndexOf('/') + 1);
-            const parentArtifactId = parentPath === '/agent-lab-projects' ? 'agent-lab-projects' : parentPath.substring(1);
+        try {
+            const { artifactId, filePath } = await this.resolveArtifactPath(path);
             
-            await this.createChildArtifact(parentArtifactId, folderName);
-        } else {
-            // For regular directories within an artifact, they are created implicitly when files are written
-            // We don't need to explicitly create directories in the file system
+            if (!filePath) {
+                // Creating a new artifact (project folder)
+                const pathSegments = path.split('/').filter(s => s);
+                const folderName = pathSegments[pathSegments.length - 1];
+                const parentPath = pathSegments.slice(0, -1).join('/');
+                const parentArtifactId = parentPath || 'root';
+                
+                await this.createChildArtifact(parentArtifactId, folderName);
+            } else {
+                // For regular directories within an artifact, they are created implicitly when files are written
+                // We don't need to explicitly create directories in the file system
+            }
+        } catch (error) {
+            console.error('❌ Failed to create directory:', error);
+            throw vscode.FileSystemError.NoPermissions(uri);
         }
     }
 
@@ -210,15 +423,15 @@ export class HyphaFileSystemProvider implements vscode.FileSystemProvider {
             return cached;
         }
 
-        const { artifactId, filePath } = this.parsePath(path);
-        console.log('📖 Parsed path - artifactId:', artifactId, 'filePath:', filePath);
-        
-        if (!filePath) {
-            console.log('❌ Cannot read file: no file path specified');
-            throw vscode.FileSystemError.FileNotFound(uri);
-        }
-
         try {
+            const { artifactId, filePath } = await this.resolveArtifactPath(path);
+            console.log('📖 Resolved - artifactId:', artifactId, 'filePath:', filePath);
+            
+            if (!filePath) {
+                console.log('❌ Cannot read file: no file path specified');
+                throw vscode.FileSystemError.FileNotFound(uri);
+            }
+
             console.log('📖 Getting file content from Hypha server');
             const content = await this.getFileContent(artifactId, filePath);
             const data = new TextEncoder().encode(content);
@@ -226,7 +439,7 @@ export class HyphaFileSystemProvider implements vscode.FileSystemProvider {
             console.log('📖 File content retrieved and cached, size:', data.length, 'bytes');
             return data;
         } catch (error) {
-            console.error('❌ Failed to read file:', error);
+            // console.error('❌ Failed to read file:', error);
             throw vscode.FileSystemError.FileNotFound(uri);
         }
     }
@@ -235,18 +448,21 @@ export class HyphaFileSystemProvider implements vscode.FileSystemProvider {
         const path = this.uriToPath(uri);
         console.log('✏️ Writing file - URI:', uri.toString(), 'Path:', path, 'Size:', content.length, 'bytes');
         
-        const { artifactId, filePath } = this.parsePath(path);
-        console.log('✏️ Parsed path - artifactId:', artifactId, 'filePath:', filePath);
-        
-        if (!filePath) {
-            console.log('❌ Cannot write file: no file path specified');
-            throw vscode.FileSystemError.NoPermissions(uri);
-        }
-
         try {
+            const { artifactId, filePath } = await this.resolveArtifactPath(path);
+            console.log('✏️ Resolved - artifactId:', artifactId, 'filePath:', filePath);
+            
+            if (!filePath) {
+                console.log('❌ Cannot write file: no file path specified');
+                throw vscode.FileSystemError.NoPermissions(uri);
+            }
+
             console.log('✏️ Saving file to Hypha server');
             await this.saveFile(artifactId, filePath, content);
             this._cache.set(path, content);
+            
+            // Invalidate artifact cache since the artifact may have been modified
+            this.invalidateArtifactCache(artifactId);
             
             console.log('✏️ File saved successfully, firing change event');
             this._emitter.fire([{
@@ -261,15 +477,21 @@ export class HyphaFileSystemProvider implements vscode.FileSystemProvider {
 
     async delete(uri: vscode.Uri, options: { recursive: boolean; }): Promise<void> {
         const path = this.uriToPath(uri);
-        const { artifactId, filePath } = this.parsePath(path);
         
-        if (!filePath) {
-            throw vscode.FileSystemError.NoPermissions(uri);
-        }
-
         try {
+            const { artifactId, filePath } = await this.resolveArtifactPath(path);
+            
+            if (!filePath) {
+                // Deleting an artifact itself
+                this.invalidateArtifactCache(artifactId);
+                throw vscode.FileSystemError.NoPermissions(uri);
+            }
+
             await this.deleteFile(artifactId, filePath);
             this._cache.delete(path);
+            
+            // Invalidate artifact cache since the artifact content changed
+            this.invalidateArtifactCache(artifactId);
             
             this._emitter.fire([{
                 type: vscode.FileChangeType.Deleted,
@@ -284,14 +506,15 @@ export class HyphaFileSystemProvider implements vscode.FileSystemProvider {
     async rename(oldUri: vscode.Uri, newUri: vscode.Uri, options: { overwrite: boolean; }): Promise<void> {
         const oldPath = this.uriToPath(oldUri);
         const newPath = this.uriToPath(newUri);
-        const { artifactId: oldArtifactId, filePath: oldFilePath } = this.parsePath(oldPath);
-        const { artifactId: newArtifactId, filePath: newFilePath } = this.parsePath(newPath);
         
-        if (!oldFilePath || !newFilePath || oldArtifactId !== newArtifactId) {
-            throw vscode.FileSystemError.NoPermissions(oldUri);
-        }
-
         try {
+            const { artifactId: oldArtifactId, filePath: oldFilePath } = await this.resolveArtifactPath(oldPath);
+            const { artifactId: newArtifactId, filePath: newFilePath } = await this.resolveArtifactPath(newPath);
+            
+            if (!oldFilePath || !newFilePath || oldArtifactId !== newArtifactId) {
+                throw vscode.FileSystemError.NoPermissions(oldUri);
+            }
+
             await this.renameFile(oldArtifactId, oldFilePath, newFilePath);
             
             const content = this._cache.get(oldPath);
@@ -299,6 +522,9 @@ export class HyphaFileSystemProvider implements vscode.FileSystemProvider {
                 this._cache.delete(oldPath);
                 this._cache.set(newPath, content);
             }
+            
+            // Invalidate artifact cache since the artifact content changed
+            this.invalidateArtifactCache(oldArtifactId);
             
             this._emitter.fire([
                 { type: vscode.FileChangeType.Deleted, uri: oldUri },
@@ -311,45 +537,17 @@ export class HyphaFileSystemProvider implements vscode.FileSystemProvider {
     }
 
     private uriToPath(uri: vscode.Uri): string {
-        // For the workspace root, we want to treat it as the agent-lab-projects artifact directly
         let path = uri.path;
-        console.log(`==========> uriToPath: ${path}`);
-        
-        // Don't include the authority in the path since we want the workspace root
-        // to map directly to the agent-lab-projects artifact
-        
         console.log('🔗 URI to Path conversion - Original URI:', uri.toString(), 'Scheme:', uri.scheme, 'Authority:', uri.authority, 'Path:', uri.path, 'Final path:', path);
         return path;
-    }
-
-    private parsePath(path: string): { artifactId: string; filePath?: string } {
-        // Remove leading slash and split
-        const segments = path.substring(1).split('/').filter(s => s);
-        
-        if (segments.length === 0) {
-            // Root path - this should be treated as the agent-lab-projects artifact root
-            return { artifactId: 'agent-lab-projects' };
-        }
-        
-        // At root level, segments[0] represents a child artifact of agent-lab-projects
-        // segments[1] and beyond represent files/folders within that child artifact
-        const artifactId = segments[0];
-        const filePath = segments.slice(1).join('/');
-        return { artifactId, filePath: filePath || undefined };
     }
 
     // Hypha API methods
     private async getArtifact(artifactId: string): Promise<any> {
         console.log('🔍 Getting artifact:', artifactId);
         
-        if (!this.authProvider.isAuthenticated()) {
-            console.log('❌ Not authenticated, cannot get artifact');
-            return null;
-        }
-
         try {
-            console.log('🔍 Getting artifact manager');
-            const artifactManager = await this.authProvider.getArtifactManager();
+            const artifactManager = await this.ensureArtifactManager();
             console.log('🔍 Artifact manager obtained, reading artifact');
             const artifact = await artifactManager.read({
                 artifact_id: artifactId,
@@ -366,31 +564,39 @@ export class HyphaFileSystemProvider implements vscode.FileSystemProvider {
     private async listChildArtifacts(parentId: string): Promise<Project[]> {
         console.log('📋 Listing child artifacts for parent:', parentId);
         
-        if (!this.authProvider.isAuthenticated()) {
-            console.log('❌ Not authenticated, cannot list child artifacts');
-            return [];
-        }
-
         try {
-            console.log('📋 Getting artifact manager');
-            const artifactManager = await this.authProvider.getArtifactManager();
+            const artifactManager = await this.ensureArtifactManager();
             console.log('📋 Listing artifacts with parent:', parentId);
             const projectsList = await artifactManager.list({
                 parent_id: parentId,
                 stage: 'all',
                 _rkwargs: true
             });
-            
-            const result = projectsList.map((project: any) => ({
-                id: project.id,
-                manifest: project.manifest || {
-                    name: project.id,
-                    description: '',
-                    version: '1.0.0',
-                    type: 'project',
-                    created_at: new Date().toISOString()
-                }
-            }));
+
+            const result = projectsList.map((project: any) => {
+                console.log('📋 Processing child artifact:', {
+                    originalId: project.id,
+                    parentId: parentId,
+                    projectType: project.type,
+                    projectManifest: project.manifest
+                });
+                
+                // Use the ID as returned by the server - don't modify it
+                const artifactId = project.id;
+                
+                console.log('📋 Child artifact processed:', project.id, '-> final ID:', artifactId);
+                
+                return {
+                    id: artifactId,
+                    manifest: project.manifest || {
+                        name: project.id,
+                        description: '',
+                        version: '1.0.0',
+                        type: 'project',
+                        created_at: new Date().toISOString()
+                    }
+                };
+            });
             
             console.log('📋 Found', result.length, 'child artifacts');
             return result;
@@ -403,14 +609,8 @@ export class HyphaFileSystemProvider implements vscode.FileSystemProvider {
     private async listFiles(artifactId: string, dirPath: string): Promise<ProjectFile[]> {
         console.log('📄 Listing files for artifact:', artifactId, 'in directory:', dirPath || '(root)');
         
-        if (!this.authProvider.isAuthenticated()) {
-            console.log('❌ Not authenticated, cannot list files');
-            return [];
-        }
-
         try {
-            console.log('📄 Getting artifact manager');
-            const artifactManager = await this.authProvider.getArtifactManager();
+            const artifactManager = await this.ensureArtifactManager();
             console.log('📄 Listing files with artifact_id:', artifactId, 'dir_path:', dirPath || '');
             const files = await artifactManager.list_files({
                 artifact_id: artifactId,
@@ -437,10 +637,6 @@ export class HyphaFileSystemProvider implements vscode.FileSystemProvider {
     }
 
     private async getFileInfo(artifactId: string, filePath: string): Promise<ProjectFile | null> {
-        if (!this.authProvider.isAuthenticated()) {
-            return null;
-        }
-
         try {
             // Get the directory containing this file
             const dirPath = filePath.includes('/') ? filePath.substring(0, filePath.lastIndexOf('/')) : '';
@@ -457,14 +653,8 @@ export class HyphaFileSystemProvider implements vscode.FileSystemProvider {
     private async getFileContent(artifactId: string, filePath: string): Promise<string> {
         console.log('📥 Getting file content for:', filePath, 'in artifact:', artifactId);
         
-        if (!this.authProvider.isAuthenticated()) {
-            console.log('❌ Not authenticated, cannot get file content');
-            throw new Error('Not authenticated');
-        }
-        
         try {
-            console.log('📥 Getting artifact manager');
-            const artifactManager = await this.authProvider.getArtifactManager();
+            const artifactManager = await this.ensureArtifactManager();
             console.log('📥 Getting file URL from artifact manager');
             const url = await artifactManager.get_file({
                 artifact_id: artifactId,
@@ -484,14 +674,14 @@ export class HyphaFileSystemProvider implements vscode.FileSystemProvider {
             console.log('📥 File content retrieved, size:', content.length, 'characters');
             return content;
         } catch (error) {
-            console.error(`❌ Failed to get file content for ${filePath}:`, error);
+            // console.debug(`❌ Failed to get file content for ${filePath}:`, error);
             throw error;
         }
     }
 
     private async saveFile(artifactId: string, filePath: string, content: Uint8Array): Promise<void> {
         try {
-            const artifactManager = await this.authProvider.getArtifactManager();
+            const artifactManager = await this.ensureArtifactManager();
             // await artifactManager.edit({
             //     artifact_id: artifactId,
             //     version: "latest",
@@ -530,7 +720,7 @@ export class HyphaFileSystemProvider implements vscode.FileSystemProvider {
 
     private async deleteFile(artifactId: string, filePath: string): Promise<void> {
         try {
-            const artifactManager = await this.authProvider.getArtifactManager();
+            const artifactManager = await this.ensureArtifactManager();
             await artifactManager.remove_file({
                 artifact_id: artifactId,
                 file_path: filePath,
@@ -545,7 +735,7 @@ export class HyphaFileSystemProvider implements vscode.FileSystemProvider {
 
     private async renameFile(artifactId: string, oldPath: string, newPath: string): Promise<void> {
         try {
-            const artifactManager = await this.authProvider.getArtifactManager();
+            const artifactManager = await this.ensureArtifactManager();
             
             // 1. Get file content from old path
             const url = await artifactManager.get_file({
@@ -603,7 +793,7 @@ export class HyphaFileSystemProvider implements vscode.FileSystemProvider {
 
     private async createChildArtifact(parentId: string, folderName: string): Promise<void> {
         try {
-            const artifactManager = await this.authProvider.getArtifactManager();
+            const artifactManager = await this.ensureArtifactManager();
             await artifactManager.create({
                 parent_id: parentId,
                 alias: folderName,
@@ -616,6 +806,10 @@ export class HyphaFileSystemProvider implements vscode.FileSystemProvider {
                 },
                 _rkwargs: true
             });
+            
+            // Invalidate cache for parent artifact since it now has a new child
+            this.invalidateArtifactCache(parentId);
+            
             console.log(`Created child artifact: ${folderName}`);
         } catch (error) {
             console.error(`Failed to create child artifact ${folderName}:`, error);

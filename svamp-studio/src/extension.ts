@@ -63,12 +63,8 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(welcomeCommand, loginCommand, logoutCommand, browseProjectsCommand);
     console.log('✅ Commands registered');
 
-    // Monitor authentication state
-    setInterval(() => {
-        const isAuth = authProvider.isAuthenticated();
-        const user = authProvider.getUser();
-        console.log('🔍 Auth status check - Authenticated:', isAuth, 'User:', user?.email || 'none');
-    }, 30000); // Check every 30 seconds
+    // Add providers to subscriptions for proper cleanup
+    context.subscriptions.push(authProvider);
 
     // Show welcome page on first activation
     console.log('📄 Showing welcome page');

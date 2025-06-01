@@ -19,8 +19,7 @@
   },
   "folderUri": {
     "scheme": "hypha",
-    "authority": "agent-lab-projects",
-    "path": "/"
+    "path": "/agent-lab-projects"
   },
   "additionalBuiltinExtensions": [
     {
