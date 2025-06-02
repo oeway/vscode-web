@@ -3,14 +3,29 @@
   "displayName": "Hypha Workspace",
   "description": "Hypha integration for VS Code",
   "version": "1.0.0",
-  "publisher": "svamp",
+  "publisher": "oeway",
   "private": true,
-  "activationEvents": ["onFileSystem:hypha", "onDebug"],
+  "activationEvents": [
+    "onFileSystem:hypha", 
+    "onDebug",
+    "onNotebook:jupyter-notebook"
+  ],
   "browser": "./extension.js",
   "engines": {
     "vscode": "^1.48.0"
   },
   "contributes": {
+    "notebooks": [
+      {
+        "type": "jupyter-notebook",
+        "displayName": "Jupyter Notebook",
+        "selector": [
+          {
+            "filenamePattern": "*.{ipynb,IPYNB}"
+          }
+        ]
+      }
+    ],
     "commands": [
       {
         "command": "hypha-workspace.welcome",
@@ -30,6 +45,16 @@
       {
         "command": "hypha-workspace.browseProjects",
         "title": "Browse Hypha Projects",
+        "category": "Hypha Workspace"
+      },
+      {
+        "command": "hypha-workspace.restartKernel",
+        "title": "Restart Deno Kernel",
+        "category": "Hypha Workspace"
+      },
+      {
+        "command": "hypha-workspace.interruptKernel",
+        "title": "Interrupt Deno Kernel",
         "category": "Hypha Workspace"
       }
     ]

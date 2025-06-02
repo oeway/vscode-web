@@ -11,7 +11,7 @@
       "resourceUrlTemplate": "https://openvsxorg.blob.core.windows.net/resources/{publisher}/{name}/{version}/{path}"
     },
     "extensionEnabledApiProposals": {
-      "svamp.hypha-workspace-extension": [
+      "hypha-workspace-extension": [
         "fileSearchProvider",
         "textSearchProvider"
       ]
