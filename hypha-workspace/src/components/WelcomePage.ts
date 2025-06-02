@@ -22,6 +22,22 @@ export function showWelcomePage(context: vscode.ExtensionContext, authProvider: 
                     if (success) {
                         console.log('✅ Webview login successful');
                         panel.webview.postMessage({ command: 'loginSuccess', user: authProvider.getUser() });
+                        
+                        // Refresh the workspace after successful login
+                        setTimeout(async () => {
+                            try {
+                                console.log('🔄 Refreshing workspace after login success');
+                                // Trigger workspace refresh by opening the hypha folder
+                                const uri = vscode.Uri.parse('hypha://agent-lab-projects');
+                                await vscode.commands.executeCommand('vscode.openFolder', uri);
+                                console.log('✅ Workspace refreshed successfully');
+                                
+                                // Don't close the welcome page - let user manually close it if needed
+                                console.log('✅ Login successful, workspace refreshed, keeping welcome page open');
+                            } catch (error) {
+                                console.error('❌ Failed to refresh workspace:', error);
+                            }
+                        }, 500); // Small delay to let authentication propagate
                     } else {
                         console.log('❌ Webview login failed');
                         panel.webview.postMessage({ command: 'loginError', error: 'Login failed' });
@@ -191,6 +207,7 @@ function getWebviewContent(isAuthenticated: boolean, user: any): string {
             <div class="login-section">
                 <h3>🔐 Connect to Hypha Server</h3>
                 <p>Login to access your projects and collaborate with the Hypha ecosystem</p>
+                <p><small>💡 <em>File explorer will be empty until you login</em></small></p>
                 <button class="btn" onclick="login()">Login to Hypha</button>
                 <div id="status"></div>
             </div>
@@ -243,11 +260,10 @@ function getWebviewContent(isAuthenticated: boolean, user: any): string {
             switch (message.command) {
                 case 'loginSuccess':
                     if (statusEl) {
-                        statusEl.innerHTML = '<div class="status success">Login successful! Reloading...</div>';
+                        statusEl.innerHTML = '<div class="status success">Login successful! Opening workspace...</div>';
                     }
-                    setTimeout(() => {
-                        location.reload();
-                    }, 1000);
+                    // Don't reload the page - let the extension handle workspace refresh
+                    // The file system provider will refresh automatically via auth state changes
                     break;
                 case 'loginError':
                     if (statusEl) {
@@ -255,7 +271,10 @@ function getWebviewContent(isAuthenticated: boolean, user: any): string {
                     }
                     break;
                 case 'logoutSuccess':
-                    location.reload();
+                    // Don't reload the page - update content reactively through auth state change
+                    if (statusEl) {
+                        statusEl.innerHTML = '<div class="status success">Logged out successfully</div>';
+                    }
                     break;
             }
         });

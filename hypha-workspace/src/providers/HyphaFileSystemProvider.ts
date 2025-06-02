@@ -67,6 +67,18 @@ export class HyphaFileSystemProvider implements vscode.FileSystemProvider {
         this.authProvider = authProvider;
         console.log('🗂️ HyphaFileSystemProvider initialized, starting artifact manager initialization');
         this.initializeArtifactManager();
+        
+        // Listen for auth state changes and refresh file system when authentication succeeds
+        authProvider.onAuthStateChanged((authState) => {
+            console.log('🔄 File system provider received auth state change:', authState.isAuthenticated);
+            if (authState.isAuthenticated) {
+                console.log('✅ Authentication successful, refreshing file system');
+                this.onAuthenticationSuccess();
+            } else {
+                console.log('❌ Authentication lost, clearing file system caches');
+                this.onAuthenticationLost();
+            }
+        });
     }
 
     private generateCacheKey(...parts: string[]): string {
@@ -531,6 +543,12 @@ export class HyphaFileSystemProvider implements vscode.FileSystemProvider {
         const path = this.uriToPath(uri);
         console.log('📊 Converted to path:', path);
 
+        // Check authentication status first
+        if (!this.authProvider.isAuthenticated()) {
+            console.log('🔒 User not authenticated, file not found for:', path);
+            throw vscode.FileSystemError.FileNotFound(uri);
+        }
+
         try {
             const { artifactId, filePath } = await this.resolveArtifactPathCached(path);
             console.log('📊 Resolved - artifactId:', artifactId, 'filePath:', filePath);
@@ -563,6 +581,11 @@ export class HyphaFileSystemProvider implements vscode.FileSystemProvider {
             }
         } catch (error) {
             console.error('❌ Error in stat:', error);
+            // If there's an authentication error, throw file not found
+            if (error instanceof Error && error.message && error.message.includes('authentication required')) {
+                console.log('🔒 Authentication required, file not found for:', path);
+                throw vscode.FileSystemError.FileNotFound(uri);
+            }
         }
 
         console.log('❌ File not found for URI:', uri.toString());
@@ -571,12 +594,18 @@ export class HyphaFileSystemProvider implements vscode.FileSystemProvider {
 
     async readDirectory(uri: vscode.Uri): Promise<[string, vscode.FileType][]> {
         const path = this.uriToPath(uri);
-        console.log('📁 Reading directory - URI:', uri.toString(), 'Path:', path);
+        console.log('📁 Reading directory - URI:', uri.toString(), 'Path:', path, 'Current auth status:', this.authProvider.isAuthenticated());
 
         // Prevent infinite loops by checking for excessively long paths
         if (path.length > 1000) {
             console.error('❌ Path too long, possible infinite loop detected:', path.substring(0, 100) + '...');
             throw vscode.FileSystemError.FileNotFound(uri);
+        }
+
+        // Check authentication status first
+        if (!this.authProvider.isAuthenticated()) {
+            console.log('🔒 User not authenticated, returning empty directory for:', path);
+            return [];
         }
 
         try {
@@ -606,7 +635,7 @@ export class HyphaFileSystemProvider implements vscode.FileSystemProvider {
                     return [childName, vscode.FileType.Directory] as [string, vscode.FileType];
                 });
                 
-                console.log('📁 Found', result.length, 'child artifacts');
+                console.log('📁 Found', result.length, 'child artifacts for', artifactId);
                 return result;
             } else {
                 // List files in the artifact using cached method
@@ -616,11 +645,16 @@ export class HyphaFileSystemProvider implements vscode.FileSystemProvider {
                     file.name,
                     file.type === 'directory' ? vscode.FileType.Directory : vscode.FileType.File
                 ] as [string, vscode.FileType]);
-                console.log('📁 Found', result.length, 'files');
+                console.log('📁 Found', result.length, 'files for', artifactId, 'in path', filePath || '(root)');
                 return result;
             }
         } catch (error) {
-            console.error('❌ Error in readDirectory:', error);
+            console.error('❌ Error in readDirectory for', path, ':', error);
+            // If there's an authentication error, return empty directory instead of throwing
+            if (error instanceof Error && error.message && error.message.includes('authentication required')) {
+                console.log('🔒 Authentication required, returning empty directory for:', path);
+                return [];
+            }
             throw vscode.FileSystemError.FileNotFound(uri);
         }
     }
@@ -986,5 +1020,92 @@ export class HyphaFileSystemProvider implements vscode.FileSystemProvider {
             console.error(`Failed to create child artifact ${folderName}:`, error);
             throw error;
         }
+    }
+
+    private onAuthenticationSuccess(): void {
+        console.log('🔄 Handling authentication success in file system provider');
+        
+        // Clear all caches to force fresh data fetch
+        this.clearAllCaches();
+        
+        // Reset artifact manager to force reinitialization
+        this.artifactManager = null;
+        this.isInitializing = false;
+        this.initializationPromise = null;
+        
+        // Initialize artifact manager with new authentication
+        this.initializeArtifactManager();
+        
+        // Use proper VSCode API approach to refresh the workspace after authentication
+        console.log('🔄 Refreshing workspace after authentication success');
+        
+        // Add a delay to ensure authentication is fully propagated
+        setTimeout(async () => {
+            try {
+                // Fire file system change events to refresh the file explorer
+                console.log('🔄 Firing file system change events');
+                this._emitter.fire([
+                    { type: vscode.FileChangeType.Changed, uri: vscode.Uri.parse('hypha:/') },
+                    { type: vscode.FileChangeType.Changed, uri: vscode.Uri.parse('hypha://agent-lab-projects') }
+                ]);
+                
+                // Execute workbench commands to refresh the explorer
+                console.log('🔄 Executing workbench refresh commands');
+                await vscode.commands.executeCommand('workbench.files.action.refreshFilesExplorer');
+                
+                // Also try to refresh the workspace itself if we have workspace folders
+                const workspaceFolders = vscode.workspace.workspaceFolders;
+                if (workspaceFolders && workspaceFolders.length > 0) {
+                    const hyphaFolders = workspaceFolders.filter(folder => folder.uri.scheme === 'hypha');
+                    if (hyphaFolders.length > 0) {
+                        console.log('🔄 Found hypha workspace folders, executing additional refresh');
+                        // Execute reload window command as last resort
+                        // await vscode.commands.executeCommand('workbench.action.reloadWindow');
+                    }
+                }
+                
+                console.log('✅ File system refresh completed successfully');
+            } catch (error) {
+                console.error('❌ Error during file system refresh:', error);
+                // Fallback: just fire basic change events
+                this._emitter.fire([
+                    { type: vscode.FileChangeType.Changed, uri: vscode.Uri.parse('hypha:/') },
+                    { type: vscode.FileChangeType.Changed, uri: vscode.Uri.parse('hypha://agent-lab-projects') }
+                ]);
+            }
+        }, 1000); // 1 second delay to ensure authentication is fully processed
+        
+        console.log('✅ File system refresh initiated after authentication success');
+    }
+
+    private onAuthenticationLost(): void {
+        console.log('🔄 Handling authentication lost in file system provider');
+        
+        // Clear all caches
+        this.clearAllCaches();
+        
+        // Reset artifact manager
+        this.artifactManager = null;
+        this.isInitializing = false;
+        this.initializationPromise = null;
+        
+        // Fire file system change events to refresh the UI and hide content
+        this._emitter.fire([
+            { type: vscode.FileChangeType.Changed, uri: vscode.Uri.parse('hypha:/') },
+            { type: vscode.FileChangeType.Changed, uri: vscode.Uri.parse('hypha://agent-lab-projects') }
+        ]);
+        
+        console.log('✅ File system cleared after authentication lost');
+    }
+
+    private clearAllCaches(): void {
+        console.log('🗑️ Clearing all file system caches');
+        this._cache.clear();
+        this.artifactCache.clear();
+        this.pathResolutionCache.clear();
+        this.fileListingCache.clear();
+        this.childArtifactsCache.clear();
+        this.pendingRequests.clear();
+        console.log('✅ All caches cleared');
     }
 } 

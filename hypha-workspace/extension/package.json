@@ -48,6 +48,11 @@
         "category": "Hypha Workspace"
       },
       {
+        "command": "hypha-workspace.refreshWorkspace",
+        "title": "Refresh Workspace",
+        "category": "Hypha Workspace"
+      },
+      {
         "command": "hypha-workspace.restartKernel",
         "title": "Restart Deno Kernel",
         "category": "Hypha Workspace"

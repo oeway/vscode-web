@@ -119,7 +119,8 @@ export class HyphaNotebookController {
         const execution = this._controller.createNotebookCellExecution(cell);
         execution.executionOrder = ++this._executionOrder;
         execution.start(Date.now());
-
+        // clear the cell output
+        execution.clearOutput();
         try {
             console.log(`[Hypha Deno] [${this.instanceId}] Starting execution for cell`);
             

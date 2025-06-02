@@ -48,6 +48,18 @@ export function activate(context: vscode.ExtensionContext) {
         const success = await authProvider.login();
         if (success) {
             console.log('✅ Login successful');
+            
+            // Refresh the workspace after successful login
+            setTimeout(async () => {
+                try {
+                    console.log('🔄 Refreshing workspace after login success');
+                    const uri = vscode.Uri.parse('hypha://agent-lab-projects');
+                    await vscode.commands.executeCommand('vscode.openFolder', uri);
+                    console.log('✅ Workspace refreshed successfully after login');
+                } catch (error) {
+                    console.error('❌ Failed to refresh workspace after login:', error);
+                }
+            }, 500); // Small delay to let authentication propagate
         } else {
             console.log('❌ Login failed');
         }
@@ -70,6 +82,21 @@ export function activate(context: vscode.ExtensionContext) {
         } catch (error) {
             console.error('❌ Failed to open folder:', error);
             vscode.window.showErrorMessage(`Failed to open Hypha projects: ${error}`);
+        }
+    });
+
+    const refreshWorkspaceCommand = vscode.commands.registerCommand('hypha-workspace.refreshWorkspace', async () => {
+        console.log('🔄 Refresh workspace command executed');
+        try {
+            // Trigger file system refresh by opening the hypha folder
+            const uri = vscode.Uri.parse('hypha://agent-lab-projects');
+            console.log('🔄 Refreshing workspace with URI:', uri.toString());
+            await vscode.commands.executeCommand('vscode.openFolder', uri);
+            console.log('✅ Workspace refreshed successfully');
+            vscode.window.showInformationMessage('Workspace refreshed successfully');
+        } catch (error) {
+            console.error('❌ Failed to refresh workspace:', error);
+            vscode.window.showErrorMessage(`Failed to refresh workspace: ${error}`);
         }
     });
 
@@ -101,6 +128,7 @@ export function activate(context: vscode.ExtensionContext) {
         loginCommand, 
         logoutCommand, 
         browseProjectsCommand,
+        refreshWorkspaceCommand,
         restartKernelCommand,
         interruptKernelCommand
     );
