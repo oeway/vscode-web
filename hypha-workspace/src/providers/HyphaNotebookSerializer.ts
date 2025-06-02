@@ -37,7 +37,7 @@ export class HyphaNotebookSerializer implements vscode.NotebookSerializer {
         }
 
         const cells = raw.cells.map(item => {
-            const source = Array.isArray(item.source) ? item.source.join('') : item.source;
+            const source = Array.isArray(item.source) ? item.source.join('\n') : item.source;
             const kind = item.cell_type === 'code' 
                 ? vscode.NotebookCellKind.Code 
                 : vscode.NotebookCellKind.Markup;
@@ -143,7 +143,7 @@ export class HyphaNotebookSerializer implements vscode.NotebookSerializer {
 
             switch (output.output_type) {
                 case 'stream':
-                    const text = Array.isArray(output.text) ? output.text.join('') : output.text;
+                    const text = Array.isArray(output.text) ? output.text.join('\n') : output.text;
                     if (output.name === 'stderr') {
                         outputItems.push(vscode.NotebookCellOutputItem.stderr(text));
                     } else {
@@ -157,14 +157,14 @@ export class HyphaNotebookSerializer implements vscode.NotebookSerializer {
                     
                     if (data['text/html']) {
                         const htmlText = Array.isArray(data['text/html']) 
-                            ? data['text/html'].join('') 
+                            ? data['text/html'].join('\n') 
                             : data['text/html'];
                         outputItems.push(vscode.NotebookCellOutputItem.text(htmlText, 'text/html'));
                     }
                     
                     if (data['text/markdown']) {
                         const mdText = Array.isArray(data['text/markdown']) 
-                            ? data['text/markdown'].join('') 
+                            ? data['text/markdown'].join('\n') 
                             : data['text/markdown'];
                         outputItems.push(vscode.NotebookCellOutputItem.text(mdText, 'text/markdown'));
                     }
@@ -185,7 +185,7 @@ export class HyphaNotebookSerializer implements vscode.NotebookSerializer {
                     
                     if (data['text/plain']) {
                         const plainText = Array.isArray(data['text/plain']) 
-                            ? data['text/plain'].join('') 
+                            ? data['text/plain'].join('\n') 
                             : data['text/plain'];
                         outputItems.push(vscode.NotebookCellOutputItem.text(plainText));
                     }
