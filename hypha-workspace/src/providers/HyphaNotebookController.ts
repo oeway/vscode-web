@@ -171,6 +171,20 @@ export class HyphaNotebookController {
                     outputs.push(new vscode.NotebookCellOutput([
                         vscode.NotebookCellOutputItem.stderr(errorText)
                     ]));
+                    execution.replaceOutput(outputs);
+                    continue;
+                }
+                if (output.type === 'execute_error') {
+                    hasError = true;
+                    const errorData = output.data || {};
+                    const errorText = errorData.traceback ? 
+                        errorData.traceback.join('\n') :
+                        `${errorData.ename || 'Error'}: ${errorData.evalue || 'Unknown error'}`;
+                    
+                    outputs.push(new vscode.NotebookCellOutput([
+                        vscode.NotebookCellOutputItem.stderr(errorText)
+                    ]));
+                    execution.replaceOutput(outputs);
                     continue;
                 }
 
@@ -179,9 +193,9 @@ export class HyphaNotebookController {
                 if (cellOutput) {
                     outputs.push(cellOutput);
                 }
+                execution.replaceOutput(outputs);
+                
             }
-
-            // Set the outputs
             execution.replaceOutput(outputs);
             execution.end(!hasError, Date.now());
 

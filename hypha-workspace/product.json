@@ -24,6 +24,12 @@
   "additionalBuiltinExtensions": [
     {
       "scheme": "https",
+      "authority": "localhost:3000",
+      "path": "/extension"
+    },
+    {
+      "scheme": "https",
+      "authority": "ws.aicell.io",
       "path": "/extension"
     }
   ]

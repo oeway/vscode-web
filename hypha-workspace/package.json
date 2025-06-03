@@ -5,8 +5,8 @@
   "scripts": {
     "build": "webpack --mode production && cp dist/extension.js extension/ && node build-deploy.js",
     "dev": "webpack --mode development --watch",
-    "start": "npm run build && NODE_ENV=production node http.js",
-    "start:dev": "concurrently \"npm run dev\" \"nodemon --exec 'cp dist/extension.js extension/ && echo Extension updated' --watch dist\" \"NODE_ENV=development node http.js\"",
+    "start:prod": "npm run build && NODE_ENV=production node http.js",
+    "start": "concurrently \"npm run dev\" \"nodemon --exec 'cp dist/extension.js extension/ && echo Extension updated' --watch dist\" \"NODE_ENV=development node http.js\"",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./"
   },

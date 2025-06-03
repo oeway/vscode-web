@@ -37,7 +37,8 @@ if (isDevelopment) {
                     if (ext.scheme === 'https') {
                         return {
                             ...ext,
-                            scheme: 'http'
+                            scheme: 'http',
+                            authority: `localhost:${PORT}`
                         };
                     }
                     return ext;

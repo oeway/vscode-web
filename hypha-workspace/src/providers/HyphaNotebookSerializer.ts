@@ -37,7 +37,15 @@ export class HyphaNotebookSerializer implements vscode.NotebookSerializer {
         }
 
         const cells = raw.cells.map(item => {
-            const source = Array.isArray(item.source) ? item.source.join('\n') : item.source;
+            // Handle source properly - Jupyter stores as array of lines, each line usually ends with \n except the last
+            let source: string;
+            if (Array.isArray(item.source)) {
+                // Join the array without adding extra newlines - the lines already contain newlines
+                source = item.source.join('');
+            } else {
+                source = item.source;
+            }
+
             const kind = item.cell_type === 'code' 
                 ? vscode.NotebookCellKind.Code 
                 : vscode.NotebookCellKind.Markup;
@@ -85,7 +93,18 @@ export class HyphaNotebookSerializer implements vscode.NotebookSerializer {
         const cells: RawNotebookCell[] = [];
 
         for (const cell of data.cells) {
-            const source = cell.value.split(/\r?\n/g);
+            // Split cell content into lines and add newlines properly for Jupyter format
+            const lines = cell.value.split(/\r?\n/g);
+            const source = lines.map((line, index) => {
+                // Add newline to each line except the last one (unless the last line is empty)
+                if (index === lines.length - 1) {
+                    // Don't add newline to the last line if it's not empty, 
+                    // but if the original content ended with a newline, preserve it
+                    return line + (cell.value.endsWith('\n') || cell.value.endsWith('\r\n') ? '\n' : '');
+                } else {
+                    return line + '\n';
+                }
+            });
             
             const rawCell: RawNotebookCell = {
                 cell_type: cell.kind === vscode.NotebookCellKind.Code ? 'code' : 'markdown',
